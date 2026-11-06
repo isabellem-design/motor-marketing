@@ -34,7 +34,7 @@ import {
   rodarChecagensMalha,
 } from "@/lib/engine/ai-malha-gpt";
 
-export const MOTOR_DB_SCHEMA_VERSION = 5;
+export const MOTOR_DB_SCHEMA_VERSION = 6;
 
 export interface MotorDatabaseState {
   schema_version?: number;
@@ -1353,8 +1353,31 @@ function createInitialSeed(): MotorDatabaseState {
     ],
   };
 
+  const idsPecasReaisPorTema: Record<
+    string,
+    { blogId: string; carrosselId: string }
+  > = {
+    [temaT5Id]: {
+      blogId: "5884ba23-863b-41d8-98aa-b34c445209bb",
+      carrosselId: "5884ba23-863b-41d8-98aa-b34c445209bd",
+    },
+    [temaT7Id]: {
+      blogId: "5fe6af87-64d4-4d21-96b4-c040da9453e2",
+      carrosselId: "cbf6f513-ff0f-4599-8dea-845c93557fc0",
+    },
+    [temaT25Id]: {
+      blogId: "dff6260d-97d2-41ef-bc2b-786be49f8f92",
+      carrosselId: "5bb4fb94-91f3-427b-92e8-7ac4bc62a463",
+    },
+    [temaT2Id]: {
+      blogId: "9480e0e0-5be0-4b59-a47b-609212905067",
+      carrosselId: "bf9445ca-ecc2-453f-af16-048ff851eeda",
+    },
+  };
+
   for (const tema of temas_editoriais.slice(0, 4)) {
-    const blogId = crypto.randomUUID();
+    const idsTema = idsPecasReaisPorTema[tema.id];
+    const blogId = idsTema?.blogId || crypto.randomUUID();
     const conteudoBlog = gerarConteudoRicoPorCanal(tema, "blog");
     const conteudoCarrossel = gerarConteudoRicoPorCanal(tema, "carrossel");
 
@@ -1392,7 +1415,7 @@ function createInitialSeed(): MotorDatabaseState {
     });
 
     // Peça de Blog (Aprovada / Pronta para abrir e editar)
-    const demandaBlogId = crypto.randomUUID();
+    const demandaBlogId = blogId;
     const adaptBlog = tema.adaptacoes_canais.blog;
     const briefingBlog: Demanda["briefing"] = {
       pauta_central: adaptBlog.angulo_adaptado,
@@ -1437,7 +1460,7 @@ function createInitialSeed(): MotorDatabaseState {
     });
 
     // Peça de Carrossel (Com 8 lâminas completas Dark Tech + Imagens reais)
-    const demandaCarrosselId = crypto.randomUUID();
+    const demandaCarrosselId = idsTema?.carrosselId || crypto.randomUUID();
     const adaptCarrossel = tema.adaptacoes_canais.carrossel;
     const briefingCarrossel: Demanda["briefing"] = {
       pauta_central: adaptCarrossel.angulo_adaptado,

@@ -555,12 +555,19 @@ export default function MotorCockpit() {
     modo: "completo" | "somente_artes",
     abrirChatGpt = false
   ) {
+    if (!contexto) return;
     setActionLoading(true);
     setErrorMsg(null);
     try {
-      const res = await fetch(
-        `/api/mcp-gpt?demanda_id=${encodeURIComponent(demandaId)}`
-      );
+      const res = await fetch("/api/ciclo-editorial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          acao: "obter_super_prompt_ui",
+          marca_id: contexto.marca_ativa.id,
+          demanda_id: demandaId,
+        }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       const texto =
@@ -595,11 +602,12 @@ export default function MotorCockpit() {
     setActionLoading(true);
     setErrorMsg(null);
     try {
-      const res = await fetch("/api/mcp-gpt", {
+      const res = await fetch("/api/ciclo-editorial", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          acao: "sincronizar_json_chatgpt",
+          acao: "sincronizar_json_chatgpt_ui",
+          marca_id: contexto.marca_ativa.id,
           demanda_id: demandaId,
           texto_colado_chatgpt: textoRetornoChatGpt,
         }),
@@ -611,7 +619,7 @@ export default function MotorCockpit() {
       setMostrarPonteChatGptMcp(false);
       setToastMsg({
         texto:
-          "Post / Carrossel atualizado automaticamente com o conteúdo desenvolvido no seu ChatGPT!",
+          "Post / Carrossel atualizado e salvo no Supabase com o conteúdo desenvolvido no seu ChatGPT!",
       });
     } catch (err) {
       setErrorMsg(
@@ -640,11 +648,12 @@ export default function MotorCockpit() {
         reader.readAsDataURL(fileOrBlob);
       });
 
-      const res = await fetch("/api/mcp-gpt", {
+      const res = await fetch("/api/ciclo-editorial", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          acao: "salvar_arte_colada_chatgpt",
+          acao: "salvar_arte_colada_chatgpt_ui",
+          marca_id: contexto.marca_ativa.id,
           demanda_id: demandaId,
           ordem_slide: ordemSlide,
           data_url: dataUrl,

@@ -2,12 +2,19 @@ import { NextRequest } from "next/server";
 import { avaliarBatimentoPrazo, getExplicitClock } from "@/lib/clock";
 import { getLiveBrandKnowledge } from "@/lib/knowledge-base";
 import { MARCA_ELOSS_ID, readMotorDb } from "@/lib/store/motor-db";
+import { sincronizarDemandasComSupabase } from "@/lib/store/supabase-pecas";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
-    const db = readMotorDb();
+    let db = readMotorDb();
     const marcaId =
       request.nextUrl.searchParams.get("marca_id") || MARCA_ELOSS_ID;
+
+    if (marcaId === MARCA_ELOSS_ID) {
+      db = await sincronizarDemandasComSupabase(db);
+    }
 
     const marcaAtiva =
       db.marcas.find((m) => m.id === marcaId) || db.marcas[0];

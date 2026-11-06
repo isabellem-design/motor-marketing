@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-/** Local stdio bridge. For ChatGPT web, connect through an authenticated private
- * tunnel; this command alone does not install a ChatGPT plugin. */
+/** Local stdio bridge. For ChatGPT web, connect through an authenticated HTTPS
+ * endpoint (or private tunnel); this command alone does not install a ChatGPT plugin. */
 import readline from "node:readline";
 import { pathToFileURL } from "node:url";
 
 export async function forwardMessage(line, {
   url = process.env.ELOSS_MOTOR_URL || "http://127.0.0.1:3005/api/mcp-gpt",
+  token = process.env.ELOSS_MCP_TOKEN || process.env.ELOSS_MCP_API_KEY || "",
   fetchImpl = fetch,
 } = {}) {
   let req;
@@ -21,10 +22,14 @@ export async function forwardMessage(line, {
   // Never forward arbitrary legacy actions to the local API.
   const notification = !Object.hasOwn(req, "id");
   if (notification) return null;
+  const headers = { "Content-Type": "application/json" };
+  if (typeof token === "string" && token.trim()) {
+    headers["Authorization"] = `Bearer ${token.trim()}`;
+  }
   try {
     const res = await fetchImpl(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(req),
       signal: AbortSignal.timeout(30_000),
     });

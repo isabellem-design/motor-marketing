@@ -15,6 +15,14 @@ import {
   writeMotorDb,
 } from "@/lib/store/motor-db";
 import {
+  ErroPersistenciaSupabase,
+  atualizarPecaNoSupabase,
+} from "@/lib/store/supabase-pecas";
+import {
+  construirSuperPromptChatGpt,
+  salvarArteColadaNoSupabase,
+} from "@/app/api/mcp-gpt/route";
+import {
   ArtigoBlogAncora,
   Demanda,
   FormatoCanal,
@@ -472,59 +480,86 @@ export async function POST(request: NextRequest) {
     }
 
     // ========================================================================
-    // 5. ATUALIZAR OU APROVAR PEÇA DIRETAMENTE DO VISUALIZADOR (BLOG / CARROSSEL / ETC.)
+    // 5. ATUALIZAR OU APROVAR PEÇA DIRETAMENTE DO VISUALIZADOR (PERSISTENTE NO SUPABASE)
     // ========================================================================
     if (acao === "atualizar_conteudo_peca") {
-      const { demanda_id, novo_status, conteudo_estruturado, artigo_markdown } =
-        body;
-      const demanda = db.demandas.find(
-        (d) => d.id === demanda_id && d.marca_id === marca_id
-      );
+      const {
+        demanda_id,
+        novo_status,
+        conteudo_estruturado,
+        artigo_markdown,
+        esperado_atualizado_em,
+      } = body;
 
-      if (demanda) {
-        if (conteudo_estruturado) {
-          demanda.conteudo_estruturado = {
-            ...demanda.conteudo_estruturado,
-            ...conteudo_estruturado,
-          };
-        }
-        if (typeof artigo_markdown === "string") {
-          demanda.conteudo_estruturado = {
-            ...demanda.conteudo_estruturado,
-            artigo_markdown,
-          };
-          const art = db.artigos_blog_ancora.find(
-            (a) =>
-              a.id === demanda.artigo_blog_origem_id ||
-              a.tema_id === demanda.tema_origem_id
-          );
-          if (art) {
-            art.conteudo_completo_markdown = artigo_markdown;
-          }
-        }
-        if (novo_status) {
-          demanda.status = novo_status;
-          const tarefasDemanda = db.tarefas_fluxo.filter(
-            (t) => t.demanda_id === demanda.id
-          );
-          for (const t of tarefasDemanda) {
-            if (novo_status === "peca_pronta") {
-              t.status = "aprovada";
-            } else if (novo_status === "reprovada_em_ajuste") {
-              t.status = t.ordem === 2 ? "reprovada" : "bloqueada";
-            }
-          }
-        }
-        demanda.atualizado_em = clock;
-      }
+      const demanda = await atualizarPecaNoSupabase({
+        demanda_id,
+        novo_status,
+        artigo_markdown,
+        legenda: conteudo_estruturado?.legenda,
+        slides: conteudo_estruturado?.slides,
+        headline_arte: conteudo_estruturado?.headline_arte,
+        destaque_gradiente: conteudo_estruturado?.destaque_gradiente,
+        subtitulo_arte: conteudo_estruturado?.subtitulo_arte,
+        prompt_imagem: conteudo_estruturado?.prompt_imagem,
+        esperado_atualizado_em,
+        ator: "Isabelle (Interface Motor de Marketing)",
+      });
 
-      writeMotorDb(db);
       return Response.json({ ok: true, demanda }, { status: 200 });
+    }
+
+    // ========================================================================
+    // 6. AÇÕES DE PONTE CHATGPT / MCP ACIONADAS PELA INTERFACE (MESMA FONTE SUPABASE)
+    // ========================================================================
+    if (acao === "obter_super_prompt_ui") {
+      const promptData = await construirSuperPromptChatGpt(
+        String(body.demanda_id || "")
+      );
+      return Response.json(promptData, { status: 200 });
+    }
+
+    if (acao === "sincronizar_json_chatgpt_ui") {
+      let payload = body;
+      if (typeof body.texto_colado_chatgpt === "string") {
+        const raw = body.texto_colado_chatgpt.trim();
+        const matchJsonBlock =
+          raw.match(/```(?:json)?\s*([\s\S]*?)```/i) ||
+          raw.match(/(\{[\s\S]*\})/);
+        if (!matchJsonBlock) {
+          return Response.json(
+            {
+              error:
+                "Não encontramos um bloco JSON válido na resposta colada. Peça ao ChatGPT: 'Me entregue o bloco JSON de sincronização da Eloss'.",
+            },
+            { status: 400 }
+          );
+        }
+        const parsed = JSON.parse(matchJsonBlock[1].trim());
+        payload = {
+          ...parsed,
+          demanda_id: body.demanda_id || parsed.demanda_id,
+        };
+      }
+      const demanda = await atualizarPecaNoSupabase({
+        ...payload,
+        ator: "Isabelle (Sincronização 1-Clique ChatGPT UI)",
+      });
+      return Response.json({ ok: true, demanda }, { status: 200 });
+    }
+
+    if (acao === "salvar_arte_colada_chatgpt_ui") {
+      const { imageUrl, demanda } = await salvarArteColadaNoSupabase(body);
+      return Response.json(
+        { ok: true, imagem_url: imageUrl, demanda },
+        { status: 200 }
+      );
     }
 
     return Response.json({ error: "Ação desconhecida." }, { status: 400 });
   } catch (err) {
+    const status =
+      err instanceof ErroPersistenciaSupabase ? err.status : 400;
     const msg = err instanceof Error ? err.message : "Erro no ciclo editorial.";
-    return Response.json({ error: msg }, { status: 400 });
+    return Response.json({ error: msg }, { status });
   }
 }
