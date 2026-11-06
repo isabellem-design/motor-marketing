@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 function construirSuperPromptChatGpt(demandaId: string) {
   const db = readMotorDb();
   const demanda =
-    db.demandas.find((d) => d.id === demandaId) || db.demandas[0];
+    db.demandas.find((d) => d.id === demandaId);
   if (!demanda) {
     throw new Error("Peça não encontrada no banco.");
   }
@@ -133,6 +133,9 @@ ${todosPromptsArte}
   return {
     demanda_id: demanda.id,
     titulo: demanda.titulo,
+    atualizado_em: demanda.atualizado_em,
+    slides,
+    legenda,
     super_prompt_completo: superPromptCompleto,
     prompt_sequencia_artes: promptSomenteArtes,
   };
@@ -155,7 +158,7 @@ function aplicarAtualizacaoDoChatGpt(payload: {
   const db = readMotorDb();
   let demanda = db.demandas.find((d) => d.id === payload.demanda_id);
 
-  if (!demanda && payload.codigo_tema) {
+  if (!payload.demanda_id && payload.codigo_tema) {
     const tema = db.temas_editoriais.find(
       (t) =>
         (t.codigo_tema || "").toLowerCase() ===
@@ -373,13 +376,29 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  let rpcId: string | number | null = null;
+  let isRpc = false;
   try {
     const body = await request.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return Response.json({ error: "Objeto JSON obrigatório." }, { status: 400 });
+    }
+    isRpc = body.jsonrpc === "2.0";
+    rpcId = body.id ?? null;
 
     // ========================================================================
     // 1. PROTOCOLO MCP JSON-RPC 2.0 (Model Context Protocol)
     // ========================================================================
-    if (body.jsonrpc === "2.0" && body.method) {
+    if (isRpc) {
+      if (typeof body.method !== "string") {
+        return Response.json({ jsonrpc: "2.0", id: rpcId,
+          error: { code: -32600, message: "Requisição MCP inválida." } });
+      }
+      // Notifications have no response in JSON-RPC (including initialized).
+      if (!("id" in body)) return new Response(null, { status: 202 });
+      if (body.method === "ping") {
+        return Response.json({ jsonrpc: "2.0", id: rpcId, result: {} });
+      }
       if (body.method === "initialize") {
         return Response.json({
           jsonrpc: "2.0",
@@ -443,7 +462,7 @@ export async function POST(request: Request) {
                       },
                     },
                   },
-                  required: ["slides"],
+                  required: ["demanda_id", "slides"],
                 },
               },
             ],
@@ -464,7 +483,7 @@ export async function POST(request: Request) {
               content: [
                 {
                   type: "text",
-                  text: info.super_prompt_completo,
+                  text: JSON.stringify(info),
                 },
               ],
             },
@@ -472,6 +491,12 @@ export async function POST(request: Request) {
         }
 
         if (toolName === "atualizar_post_no_sistema_eloss") {
+          if (typeof args.demanda_id !== "string" || !args.demanda_id.trim()) {
+            throw new Error("demanda_id é obrigatório para atualizar via MCP.");
+          }
+          if (!Array.isArray(args.slides) || args.slides.length === 0) {
+            throw new Error("Envie todos os slides do carrossel.");
+          }
           const atualizada = aplicarAtualizacaoDoChatGpt(args);
           return Response.json({
             jsonrpc: "2.0",
@@ -487,6 +512,8 @@ export async function POST(request: Request) {
           });
         }
       }
+      return Response.json({ jsonrpc: "2.0", id: rpcId,
+        error: { code: -32601, message: "Método ou ferramenta MCP desconhecida." } });
     }
 
     // ========================================================================
@@ -629,6 +656,11 @@ export async function POST(request: Request) {
 
     return Response.json({ error: "Ação MCP desconhecida." }, { status: 400 });
   } catch (err) {
+    if (isRpc) {
+      return Response.json({ jsonrpc: "2.0", id: rpcId,
+        result: { isError: true, content: [{ type: "text",
+          text: err instanceof Error ? err.message : "Falha na operação MCP." }] } });
+    }
     return Response.json(
       {
         error:
