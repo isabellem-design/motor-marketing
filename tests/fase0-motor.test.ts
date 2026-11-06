@@ -40,8 +40,7 @@ describe("Motor de Produção de Marketing — Fase 0 (Piloto Eloss + Reels Sema
         ...baseAntes,
         posicionamento:
           "Ecossistema Eloss [ATUALIZADO AO VIVO SEM CACHE PARA TESTE]",
-      },
-      "Evandro"
+      }
     );
 
     const promptEtapa1 = await compileTaskPromptLive(

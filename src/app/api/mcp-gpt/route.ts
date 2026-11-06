@@ -158,7 +158,8 @@ function aplicarAtualizacaoDoChatGpt(payload: {
   if (!demanda && payload.codigo_tema) {
     const tema = db.temas_editoriais.find(
       (t) =>
-        t.codigo_tema.toLowerCase() === payload.codigo_tema?.toLowerCase()
+        (t.codigo_tema || "").toLowerCase() ===
+        payload.codigo_tema?.toLowerCase()
     );
     if (tema) {
       demanda = db.demandas.find(

@@ -63,8 +63,7 @@ export async function PUT(request: NextRequest) {
 
     const atualizada = await updateLiveBrandKnowledge(
       marca_id,
-      base_conhecimento,
-      autor || "Operador"
+      base_conhecimento
     );
     return Response.json({ base_conhecimento_viva: atualizada });
   } catch (error) {
