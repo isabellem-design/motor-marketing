@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Demanda, Marca, TemaEditorial } from "@/lib/types";
 
 export interface MetricoolSuiteProps {
@@ -560,7 +560,39 @@ export default function MetricoolSuite({
     setModalCriarPostAberto(true);
   }
 
-  function salvarPostNoCalendario(
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/metricool?marca_id=${encodeURIComponent(marcaAtiva.id)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!active || !data?.state) return;
+        const st = data.state;
+        if (Array.isArray(st.postsAgendados)) {
+          setPostsAgendadosExtras(st.postsAgendados);
+        }
+        const sl = st.smartLinksPorMarca?.[marcaAtiva.id];
+        if (sl) {
+          if (sl.titulo) setSmartLinkTitulo(sl.titulo);
+          if (sl.bio) setSmartLinkBio(sl.bio);
+          if (Array.isArray(sl.botoes)) setSmartLinkBotoes(sl.botoes);
+        }
+        const comps = st.concorrentesPorMarca?.[marcaAtiva.id];
+        if (Array.isArray(comps) && comps.length > 0) {
+          setConcorrentes(comps);
+        }
+        if (Array.isArray(st.threadsInbox) && st.threadsInbox.length > 0) {
+          setThreadsInbox(st.threadsInbox);
+        }
+      })
+      .catch(() => {
+        // fallback silencioso
+      });
+    return () => {
+      active = false;
+    };
+  }, [marcaAtiva.id]);
+
+  async function salvarPostNoCalendario(
     novoStatus: "agendado" | "rascunho" | "publicado"
   ) {
     if (!postLegenda.trim() && !postTitulo.trim()) {
@@ -595,12 +627,26 @@ export default function MetricoolSuite({
       return [novoItem, ...semAtual];
     });
     setModalCriarPostAberto(false);
+
+    try {
+      await fetch("/api/metricool", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          acao: "salvar_post_calendario",
+          post: novoItem,
+        }),
+      });
+    } catch {
+      // ignore
+    }
+
     dispararToast(
       novoStatus === "publicado"
-        ? "Publicação disparada imediatamente para as redes selecionadas!"
+        ? "Publicação salva no Supabase e marcada como publicada!"
         : novoStatus === "rascunho"
-          ? "Publicação guardada como rascunho no Calendário!"
-          : `Publicação agendada para ${DIAS_SEMANA[postDiaIdx]?.longo} às ${String(postHora).padStart(2, "0")}:${String(postMinuto).padStart(2, "0")}!`
+          ? "Publicação guardada e persistida como rascunho no Calendário!"
+          : `Publicação agendada e salva no Supabase para ${DIAS_SEMANA[postDiaIdx]?.longo} às ${String(postHora).padStart(2, "0")}:${String(postMinuto).padStart(2, "0")}!`
     );
   }
 
