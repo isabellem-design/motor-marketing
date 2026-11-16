@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import MetricoolSuite from "@/components/MetricoolSuite";
 import {
   ArtigoBlogAncora,
   BaseConhecimentoMarca,
@@ -31,13 +32,14 @@ interface ContextoPayload {
   tarefas_fluxo: TarefaFluxo[];
 }
 
-type NavSection =
+export type NavSection =
   | "pesquisa"
   | "banco_temas"
   | "malhas"
   | "pecas"
   | "fila_validacao"
-  | "base_marca";
+  | "base_marca"
+  | "metricool";
 
 const TODOS_CANAIS: {
   id: FormatoCanal;
@@ -247,7 +249,11 @@ function ArtigoBlogRenderer({ markdown }: { markdown: string }) {
   );
 }
 
-export default function MotorCockpit() {
+export default function MotorCockpit({
+  initialSection = "banco_temas",
+}: {
+  initialSection?: NavSection;
+} = {}) {
   const [contexto, setContexto] = useState<ContextoPayload | null>(null);
   const [marcaSelecionadaId, setMarcaSelecionadaId] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
@@ -260,7 +266,8 @@ export default function MotorCockpit() {
   } | null>(null);
 
   // Menu Lateral
-  const [activeSection, setActiveSection] = useState<NavSection>("banco_temas");
+  const [activeSection, setActiveSection] =
+    useState<NavSection>(initialSection);
   const [sidebarPinned, setSidebarPinned] = useState<boolean>(true);
 
   // Pesquisa
@@ -919,6 +926,32 @@ export default function MotorCockpit() {
             <div>
               {sidebarPinned && (
                 <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Agendamento & Métricas
+                </p>
+              )}
+              <button
+                onClick={() => setActiveSection("metricool")}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all cursor-pointer ${
+                  activeSection === "metricool"
+                    ? "bg-[#261724] text-[#D4F838] shadow-xs"
+                    : "bg-[#261724]/95 text-white hover:bg-[#261724]"
+                }`}
+              >
+                <span className="flex items-center gap-2.5 truncate">
+                  <span className="text-base font-black text-[#D4F838]">∞</span>
+                  {sidebarPinned && <span>Metricool Suite</span>}
+                </span>
+                {sidebarPinned && (
+                  <span className="px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-[#D4F838] text-[#261724]">
+                    PRO
+                  </span>
+                )}
+              </button>
+            </div>
+
+            <div>
+              {sidebarPinned && (
+                <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Marca
                 </p>
               )}
@@ -966,8 +999,21 @@ export default function MotorCockpit() {
       </aside>
 
       {/* =====================================================================
-          ÁREA PRINCIPAL
+          ÁREA PRINCIPAL (OU SUITE METRICOOL COMPLETA)
       ===================================================================== */}
+      {activeSection === "metricool" ? (
+        <div className="flex-1 min-w-0">
+          <MetricoolSuite
+            marcas={contexto.marcas}
+            marcaAtiva={contexto.marca_ativa}
+            onTrocarMarca={(mId) => carregarContexto(mId)}
+            demandas={contexto.demandas}
+            temas={contexto.temas_editoriais}
+            onAbrirDemandaNoMotor={(dId) => setModalDemandaId(dId)}
+            onVoltarAoMotor={() => setActiveSection("banco_temas")}
+          />
+        </div>
+      ) : (
       <main className="flex-1 min-w-0 p-6 sm:p-8 max-w-6xl mx-auto">
         {toastMsg && (
           <div className="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-2xl px-5 py-3.5 flex items-center justify-between gap-4 shadow-sm">
@@ -1908,6 +1954,7 @@ export default function MotorCockpit() {
           </div>
         )}
       </main>
+      )}
 
       {/* =====================================================================
           MODAL 1: DEMANDAR PARA CRIAÇÃO (SELEÇÃO DE CANAIS)
