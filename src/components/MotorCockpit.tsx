@@ -926,26 +926,21 @@ export default function MotorCockpit({
             <div>
               {sidebarPinned && (
                 <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Agendamento & Métricas
+                  Publicação & Ciclo
                 </p>
               )}
               <button
                 onClick={() => setActiveSection("metricool")}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all cursor-pointer ${
                   activeSection === "metricool"
-                    ? "bg-[#261724] text-[#D4F838] shadow-xs"
-                    : "bg-[#261724]/95 text-white hover:bg-[#261724]"
+                    ? "bg-[#F3E8FF] text-[#5B1F8A] font-semibold"
+                    : "text-slate-600 hover:bg-slate-50"
                 }`}
               >
-                <span className="flex items-center gap-2.5 truncate">
-                  <span className="text-base font-black text-[#D4F838]">∞</span>
-                  {sidebarPinned && <span>Metricool Suite</span>}
+                <span className="flex items-center gap-3 truncate">
+                  <span className="text-base">📅</span>
+                  {sidebarPinned && <span>Calendário & Publicação</span>}
                 </span>
-                {sidebarPinned && (
-                  <span className="px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-[#D4F838] text-[#261724]">
-                    PRO
-                  </span>
-                )}
               </button>
             </div>
 
@@ -999,10 +994,10 @@ export default function MotorCockpit({
       </aside>
 
       {/* =====================================================================
-          ÁREA PRINCIPAL (OU SUITE METRICOOL COMPLETA)
+          ÁREA PRINCIPAL (ETAPAS DO MOTOR EM HARMONIA)
       ===================================================================== */}
-      {activeSection === "metricool" ? (
-        <div className="flex-1 min-w-0">
+      <main className="flex-1 min-w-0 p-6 sm:p-8 max-w-6xl mx-auto">
+        {activeSection === "metricool" && (
           <MetricoolSuite
             marcas={contexto.marcas}
             marcaAtiva={contexto.marca_ativa}
@@ -1011,10 +1006,11 @@ export default function MotorCockpit({
             temas={contexto.temas_editoriais}
             onAbrirDemandaNoMotor={(dId) => setModalDemandaId(dId)}
             onVoltarAoMotor={() => setActiveSection("banco_temas")}
+            onRecarregarContexto={() =>
+              carregarContexto(contexto.marca_ativa.id)
+            }
           />
-        </div>
-      ) : (
-      <main className="flex-1 min-w-0 p-6 sm:p-8 max-w-6xl mx-auto">
+        )}
         {toastMsg && (
           <div className="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-2xl px-5 py-3.5 flex items-center justify-between gap-4 shadow-sm">
             <div className="flex items-center gap-3 text-sm font-medium">
@@ -1954,7 +1950,6 @@ export default function MotorCockpit({
           </div>
         )}
       </main>
-      )}
 
       {/* =====================================================================
           MODAL 1: DEMANDAR PARA CRIAÇÃO (SELEÇÃO DE CANAIS)

@@ -486,6 +486,7 @@ export async function POST(request: NextRequest) {
       const {
         demanda_id,
         novo_status,
+        estado_supabase_direto,
         conteudo_estruturado,
         artigo_markdown,
         esperado_atualizado_em,
@@ -494,6 +495,7 @@ export async function POST(request: NextRequest) {
       const demanda = await atualizarPecaNoSupabase({
         demanda_id,
         novo_status,
+        estado_supabase_direto,
         artigo_markdown,
         legenda: conteudo_estruturado?.legenda,
         slides: conteudo_estruturado?.slides,
@@ -501,6 +503,10 @@ export async function POST(request: NextRequest) {
         destaque_gradiente: conteudo_estruturado?.destaque_gradiente,
         subtitulo_arte: conteudo_estruturado?.subtitulo_arte,
         prompt_imagem: conteudo_estruturado?.prompt_imagem,
+        agendado_para: conteudo_estruturado?.agendado_para,
+        publicado_em: conteudo_estruturado?.publicado_em,
+        url_publicada: conteudo_estruturado?.url_publicada,
+        metricas_reais: conteudo_estruturado?.metricas_reais,
         esperado_atualizado_em,
         ator: "Isabelle (Interface Motor de Marketing)",
       });

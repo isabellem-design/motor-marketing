@@ -187,6 +187,18 @@ export interface ConteudoEstruturadoPeca {
     elemento_interativo: string;
   }[];
   checagens?: ChecagemMarcaEloss[];
+  agendado_para?: string | null;
+  publicado_em?: string | null;
+  url_publicada?: string | null;
+  metricas_reais?: {
+    alcance?: number;
+    impressoes?: number;
+    interacoes?: number;
+    salvamentos?: number;
+    cliques?: number;
+    observacoes?: string;
+    registrado_em?: string;
+  };
 }
 
 export interface TemaEditorial {

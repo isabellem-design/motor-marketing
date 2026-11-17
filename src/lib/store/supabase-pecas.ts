@@ -206,6 +206,16 @@ export function converterConteudoSupabaseParaEstruturado(
     prompt_imagem: parsed.prompt_imagem
       ? String(parsed.prompt_imagem)
       : undefined,
+    agendado_para:
+      typeof parsed.agendado_para === "string" ? parsed.agendado_para : null,
+    publicado_em:
+      typeof parsed.publicado_em === "string" ? parsed.publicado_em : null,
+    url_publicada:
+      typeof parsed.url_publicada === "string" ? parsed.url_publicada : null,
+    metricas_reais:
+      parsed.metricas_reais && typeof parsed.metricas_reais === "object"
+        ? (parsed.metricas_reais as ConteudoEstruturadoPeca["metricas_reais"])
+        : undefined,
     checagens:
       Array.isArray(row.checagens) && row.checagens.length > 0
         ? row.checagens
@@ -612,6 +622,11 @@ export interface AtualizarPecaSupabasePayload {
   prompt_imagem?: string;
   artigo_markdown?: string;
   novo_status?: Demanda["status"];
+  estado_supabase_direto?: "rascunho" | "aguardando_aprovacao" | "aprovada" | "publicada" | "rejeitada";
+  agendado_para?: string | null;
+  publicado_em?: string | null;
+  url_publicada?: string | null;
+  metricas_reais?: ConteudoEstruturadoPeca["metricas_reais"];
   esperado_atualizado_em?: string;
   ator?: string;
 }
@@ -974,15 +989,29 @@ export async function atualizarPecaNoSupabase(
       ...(payload.prompt_imagem !== undefined
         ? { prompt_imagem: payload.prompt_imagem }
         : {}),
+      ...(payload.agendado_para !== undefined
+        ? { agendado_para: payload.agendado_para }
+        : {}),
+      ...(payload.publicado_em !== undefined
+        ? { publicado_em: payload.publicado_em }
+        : {}),
+      ...(payload.url_publicada !== undefined
+        ? { url_publicada: payload.url_publicada }
+        : {}),
+      ...(payload.metricas_reais !== undefined
+        ? { metricas_reais: payload.metricas_reais }
+        : {}),
     };
 
     novoConteudoString = JSON.stringify(objetoConteudoFinal);
   }
 
-  const novoEstadoSupabase = mapearStatusDemandaParaEstadoSupabase(
-    payload.novo_status,
-    pecaAtual.estado
-  );
+  const novoEstadoSupabase =
+    payload.estado_supabase_direto ||
+    mapearStatusDemandaParaEstadoSupabase(
+      payload.novo_status,
+      pecaAtual.estado
+    );
 
   // 3. Persistir no Supabase (PATCH com Prefer: return=representation)
   const patchRes = await fetch(
