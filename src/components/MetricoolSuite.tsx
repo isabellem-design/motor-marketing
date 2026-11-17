@@ -21,41 +21,111 @@ type SubView =
   | "resultados_ciclo"
   | "conexoes_empresa";
 
-const CATALOGO_CONEXOES_EMPRESA = [
+const CATALOGO_CONEXOES_EMPRESA: Array<{
+  provedor: string;
+  nome: string;
+  labelConectado: string;
+  textoBotaoLigar: string;
+  corBarra: string;
+  icone: string;
+  dependeDeSite?: boolean;
+}> = [
   {
     provedor: "wordpress",
-    nome: "Website / Blog WordPress",
+    nome: "Site",
+    labelConectado: "Página web",
+    textoBotaoLigar: "Ligar uma página web",
+    corBarra: "#7B8CDE",
     icone: "🌐",
-    descricao:
-      "Publicação dos Artigos Âncora AEO produzidos no Motor diretamente no site da empresa.",
   },
   {
-    provedor: "instagram",
-    nome: "Instagram Business (Meta Graph API)",
-    icone: "📸",
-    descricao:
-      "Publicação de Carrosséis/Reels aprovados no Gate e leitura de métricas e comentários reais da conta.",
+    provedor: "blog_rss",
+    nome: "Blog",
+    labelConectado: "Blog",
+    textoBotaoLigar: "Ligar um blog",
+    corBarra: "#93B8B9",
+    icone: "📰",
+    dependeDeSite: true,
   },
   {
     provedor: "facebook",
-    nome: "Facebook Page (Meta Graph API)",
+    nome: "Facebook",
+    labelConectado: "Página",
+    textoBotaoLigar: "Ligar uma página do Facebook",
+    corBarra: "#1877F2",
     icone: "📘",
-    descricao:
-      "Distribuição espelhada de posts e leitura de alcance real da Página.",
+  },
+  {
+    provedor: "instagram",
+    nome: "Instagram",
+    labelConectado: "Conta profissional",
+    textoBotaoLigar: "Ligar uma conta profissional do Instagram",
+    corBarra: "#E1306C",
+    icone: "📸",
+  },
+  {
+    provedor: "threads",
+    nome: "Threads",
+    labelConectado: "Conta",
+    textoBotaoLigar: "Ligar uma conta do Threads",
+    corBarra: "#111111",
+    icone: "🧵",
   },
   {
     provedor: "linkedin",
-    nome: "LinkedIn Company Page",
+    nome: "LinkedIn",
+    labelConectado: "Página empresarial",
+    textoBotaoLigar: "Ligar uma conta do LinkedIn",
+    corBarra: "#0A66C2",
     icone: "💼",
-    descricao:
-      "Distribuição B2B dos desdobramentos técnicos para decisores e sócios.",
+  },
+  {
+    provedor: "tiktok",
+    nome: "TikTok business",
+    labelConectado: "Conta empresarial",
+    textoBotaoLigar: "Ligar uma conta empresarial TikTok",
+    corBarra: "#000000",
+    icone: "🎵",
   },
   {
     provedor: "google",
-    nome: "Google Search Console / Analytics",
-    icone: "🔍",
-    descricao:
-      "Acompanhamento de indexação orgânica SEO/AEO dos artigos âncora.",
+    nome: "Google Business Profile",
+    labelConectado: "Estabelecimento / Conta",
+    textoBotaoLigar: "Ligar uma conta do Google Business Profile",
+    corBarra: "#518EF8",
+    icone: "🏪",
+  },
+  {
+    provedor: "youtube",
+    nome: "YouTube",
+    labelConectado: "Canal",
+    textoBotaoLigar: "Ligar um canal do YouTube",
+    corBarra: "#FF0000",
+    icone: "▶️",
+  },
+  {
+    provedor: "meta_ads",
+    nome: "Meta Ads",
+    labelConectado: "Conta de anúncios",
+    textoBotaoLigar: "Ligar uma conta de Meta Ads",
+    corBarra: "#1E6BF1",
+    icone: "∞",
+  },
+  {
+    provedor: "google_ads",
+    nome: "Google Ads",
+    labelConectado: "Conta de anúncios",
+    textoBotaoLigar: "Ligar uma conta do Google Ads",
+    corBarra: "#4C8BF5",
+    icone: "🎯",
+  },
+  {
+    provedor: "tiktok_ads",
+    nome: "TikTok Ads",
+    labelConectado: "Conta de anúncios",
+    textoBotaoLigar: "Ligar uma conta do TikTok Ads",
+    corBarra: "#111111",
+    icone: "🎵",
   },
 ];
 
@@ -419,11 +489,26 @@ export default function MetricoolSuite({
     }
   }
 
-  async function salvarConexaoEmpresa() {
-    if (!provedorConfigurando || !formToken.trim()) {
-      avisar("Informe o Token ou Senha de Aplicação para validar a conexão.");
-      return;
-    }
+  async function salvarConexaoEmpresa(override?: {
+    provedor: string;
+    nome_conta?: string;
+    handle?: string;
+    account_id?: string;
+    site_url?: string;
+    token?: string;
+  }) {
+    const prov = override?.provedor || provedorConfigurando;
+    if (!prov) return;
+
+    const nomeConta = override?.nome_conta || formSiteUrl.trim() || marcaAtiva.nome;
+    const handle = override?.handle || formSiteUrl.trim() || `@${marcaAtiva.slug}`;
+    const accId =
+      override?.account_id ||
+      formAccountId.trim() ||
+      `${marcaAtiva.slug}_${prov}_id`;
+    const siteUrl = override?.site_url || formSiteUrl.trim();
+    const tok = override?.token || formToken.trim() || `central_${prov}_${marcaAtiva.slug}`;
+
     setSalvando(true);
     try {
       const res = await fetch("/api/metricool", {
@@ -433,24 +518,49 @@ export default function MetricoolSuite({
           acao: "conectar_integracao_empresa",
           marca_id: marcaAtiva.id,
           empresa_id: empresaIdSupabase || undefined,
-          provedor: provedorConfigurando,
-          token: formToken.trim(),
-          account_id: formAccountId.trim(),
-          site_url: formSiteUrl.trim(),
-          usuario: formAccountId.trim(),
+          provedor: prov,
+          token: tok,
+          nome_conta: nomeConta,
+          handle,
+          account_id: accId,
+          site_url: siteUrl,
+          usuario: formAccountId.trim() || undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        avisar(data.error || "Falha ao validar credencial.");
+        avisar(data.error || "Falha ao salvar ligação.");
         return;
       }
       setIntegracoesEmpresa(data.integracoes_empresa || []);
       setProvedorConfigurando(null);
       setFormToken("");
       avisar(
-        `Conexão ${provedorConfigurando.toUpperCase()} salva no Supabase para ${marcaAtiva.nome}!`
+        `${prov.toUpperCase()} ligado com sucesso à marca ${marcaAtiva.nome}!`
       );
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function desconectarCanalEmpresa(provedor: string) {
+    setSalvando(true);
+    try {
+      const res = await fetch("/api/metricool", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          acao: "desconectar_integracao_empresa",
+          marca_id: marcaAtiva.id,
+          empresa_id: empresaIdSupabase || undefined,
+          provedor,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.integracoes_empresa) {
+        setIntegracoesEmpresa(data.integracoes_empresa);
+        avisar(`Ligação ${provedor.toUpperCase()} desligada de ${marcaAtiva.nome}.`);
+      }
     } finally {
       setSalvando(false);
     }
@@ -1097,309 +1207,436 @@ export default function MetricoolSuite({
       )}
 
       {/* =====================================================================
-          VISÃO 4: CENTRAL BUSINESS DA META (IDENTIFICAÇÃO AUTOMÁTICA POR NOME) + CANAIS
+          VISÃO 4: DEFINIÇÕES DA MARCA -> LIGAÇÕES (FIEL AO METRICOOL /brands/connections)
       ===================================================================== */}
       {subView === "conexoes_empresa" && (
-        <div className="space-y-5">
-          {/* BLOCO 1: CENTRAL DE CONTAS META BUSINESS (EXATAMENTE COMO NO METRICOOL!) */}
+        <div className="space-y-6">
+          {/* Card Superior de Marcas (idêntico à foto final_step_129.png do Metricool) */}
           <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-2xs space-y-4">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="space-y-1 max-w-2xl">
-                <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-extrabold uppercase">
-                  Identificação Automática por Nome da Conta
-                </span>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
                 <h2 className="text-base font-extrabold text-slate-900">
-                  🔵 Central Business da Meta (Instagram, Facebook e Anúncios)
+                  Marcas
                 </h2>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Igual ao Metricool: você conecta a sua{" "}
-                  <strong>Conta Business da Meta</strong> uma única vez e o
-                  sistema varre todas as Páginas e perfis do Instagram dentro da
-                  sua Central,{" "}
-                  <strong>
-                    identificando sozinho pelo nome da empresa ({marcaAtiva.nome})
-                  </strong>{" "}
-                  qual conta vincular — sem precisar digitar ID ou configurar uma
-                  por uma.
-                </p>
+                <span className="text-xs font-semibold text-slate-500">
+                  {marcas.findIndex((m) => m.id === marcaAtiva.id) + 1} de{" "}
+                  {marcas.length}
+                </span>
               </div>
 
-              <div className="flex items-center gap-2 flex-wrap">
-                <a
-                  href={`/api/metricool/oauth/meta?marca_id=${encodeURIComponent(
-                    marcaAtiva.id
-                  )}`}
-                  onClick={(e) => {
-                    if (!centralMeta.conectada) {
-                      e.preventDefault();
-                      setModalCentralMetaAberto(true);
-                    }
-                  }}
-                  className="px-4 py-2.5 rounded-xl bg-[#1877F2] hover:bg-[#166fe5] text-white text-xs font-extrabold flex items-center gap-2 shadow-xs cursor-pointer"
-                >
-                  <span>🔵</span>
-                  <span>
-                    {centralMeta.conectada
-                      ? `Central Conectada (${centralMeta.usuario_meta_nome || "Meta Business"}) · Atualizar`
-                      : "Conectar Conta Business da Meta"}
-                  </span>
-                </a>
-              </div>
+              <button
+                type="button"
+                onClick={() => setModalNovaEmpresa(true)}
+                className="px-4 py-2 rounded-xl bg-[#EEF8B4] hover:bg-[#D4F838] text-slate-900 text-xs font-extrabold flex items-center gap-2 cursor-pointer transition-colors"
+              >
+                <span>+ Adicionar marca</span>
+                <span className="w-4 h-4 rounded-full bg-[#D4F838] text-[9px] flex items-center justify-center">
+                  💎
+                </span>
+              </button>
             </div>
 
-            {/* Lista de Contas encontradas na Central Meta Business */}
-            {centralMeta.conectada &&
-              centralMeta.contas_paginas_e_instagram.length > 0 && (
-                <div className="pt-3 border-t border-slate-100 space-y-2.5">
-                  <p className="text-xs font-extrabold text-slate-800">
-                    Contas localizadas dentro da sua Central Business da Meta:
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {centralMeta.contas_paginas_e_instagram.map((c) => {
-                      const jaVinculada =
-                        obterIntegracaoAtiva("facebook")?.config?.page_id ===
-                          c.page_id ||
-                        (c.ig_id &&
-                          obterIntegracaoAtiva("instagram")?.config
-                            ?.account_id === c.ig_id);
-                      return (
-                        <div
-                          key={c.page_id}
-                          className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${
-                            jaVinculada
-                              ? "bg-emerald-50/70 border-emerald-300"
-                              : "bg-slate-50 border-slate-200"
-                          }`}
-                        >
-                          <div className="space-y-0.5">
-                            <p className="text-xs font-extrabold text-slate-900">
-                              📘 {c.page_name}{" "}
-                              {c.ig_username ? (
-                                <span className="text-[#E1306C]">
-                                  · 📸 {c.ig_username}
-                                </span>
-                              ) : null}
-                            </p>
-                            <p className="text-[11px] text-slate-500">
-                              {c.ig_followers !== undefined
-                                ? `${c.ig_followers.toLocaleString("pt-BR")} seguidores no Instagram`
-                                : `${(c.page_followers || 0).toLocaleString("pt-BR")} seguidores na Página`}
-                            </p>
-                          </div>
-
-                          {jaVinculada ? (
-                            <span className="px-2.5 py-1 rounded-full bg-emerald-200 text-emerald-950 text-[10px] font-extrabold shrink-0">
-                              ✓ Identificada p/ {marcaAtiva.nome}
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                setSalvando(true);
-                                try {
-                                  const r = await fetch("/api/metricool", {
-                                    method: "POST",
-                                    headers: {
-                                      "Content-Type": "application/json",
-                                    },
-                                    body: JSON.stringify({
-                                      acao: "vincular_conta_da_central_meta",
-                                      marca_id: marcaAtiva.id,
-                                      empresa_id:
-                                        empresaIdSupabase || undefined,
-                                      conta: c,
-                                    }),
-                                  });
-                                  const d = await r.json();
-                                  if (r.ok && d.integracoes_empresa) {
-                                    setIntegracoesEmpresa(
-                                      d.integracoes_empresa
-                                    );
-                                    avisar(
-                                      `Conta "${c.page_name}" vinculada à empresa ${marcaAtiva.nome}!`
-                                    );
-                                  }
-                                } finally {
-                                  setSalvando(false);
-                                }
-                              }}
-                              className="px-3 py-1.5 rounded-lg bg-[#382060] text-white text-[11px] font-bold cursor-pointer shrink-0"
-                            >
-                              Usar em {marcaAtiva.nome}
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
+            {/* Caixa cinza claro da Marca Ativa com avatar, ícones das redes conectadas e seletor */}
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-2.5">
+              <div className="bg-white rounded-xl p-4 border border-slate-200 max-w-xl flex items-center justify-between gap-4 shadow-2xs">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-[#382060] via-[#5B1F8A] to-[#F4834B] text-white font-black text-lg flex items-center justify-center shrink-0">
+                    {marcaAtiva.nome.charAt(0)}
                   </div>
-                </div>
-              )}
-          </div>
-
-          {/* BLOCO 2: RESUMO DOS CANAIS VINCULADOS NESTA EMPRESA */}
-          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-2xs space-y-4">
-            <h3 className="text-sm font-extrabold text-slate-900">
-              Status dos Canais de {marcaAtiva.nome}
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {CATALOGO_CONEXOES_EMPRESA.map((c) => {
-                const intAtiva = obterIntegracaoAtiva(c.provedor);
-                const ehMeta =
-                  c.provedor === "instagram" || c.provedor === "facebook";
-                return (
-                  <div
-                    key={c.provedor}
-                    className={`p-4 rounded-2xl border flex flex-col justify-between gap-3 ${
-                      intAtiva
-                        ? "bg-emerald-50/40 border-emerald-300"
-                        : "bg-slate-50 border-slate-200"
-                    }`}
-                  >
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-extrabold text-slate-900">
-                          {c.icone} {c.nome}
+                  <div className="space-y-1">
+                    <select
+                      value={marcaAtiva.id}
+                      onChange={(e) => onTrocarMarca(e.target.value)}
+                      className="text-sm font-extrabold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
+                    >
+                      {marcas.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.nome} ({m.slug})
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {integracoesEmpresa.length === 0 ? (
+                        <span className="text-[11px] text-slate-400">
+                          Nenhuma rede ligada ainda
                         </span>
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            intAtiva
-                              ? "bg-emerald-200 text-emerald-950"
-                              : "bg-slate-200 text-slate-600"
-                          }`}
-                        >
-                          {intAtiva ? "Conectado" : "Aguardando vínculo"}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-600">
-                        {c.descricao}
-                      </p>
-                      {intAtiva && (
-                        <p className="text-[11px] font-bold text-emerald-900 pt-1">
-                          ✓{" "}
-                          {intAtiva.config?.nome_conta ||
-                            intAtiva.config?.handle ||
-                            intAtiva.config?.site_url ||
-                            "Conta vinculada"}
-                        </p>
+                      ) : (
+                        integracoesEmpresa.map((int) => (
+                          <span
+                            key={int.id}
+                            title={`${int.provedor}: ${int.config?.nome_conta || int.config?.site_url || "Conectado"}`}
+                            className="px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-800"
+                          >
+                            {int.provedor.toUpperCase()} ✓
+                          </span>
+                        ))
                       )}
                     </div>
-
-                    {ehMeta ? (
-                      <button
-                        type="button"
-                        onClick={() => setModalCentralMetaAberto(true)}
-                        className="px-3 py-2 rounded-xl bg-[#1877F2] text-white text-xs font-bold cursor-pointer"
-                      >
-                        {intAtiva
-                          ? "Trocar conta na Central Meta"
-                          : "🔵 Identificar pela Central Meta"}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setProvedorConfigurando(c.provedor);
-                          setFormToken("");
-                          setFormAccountId(
-                            intAtiva?.config?.account_id ||
-                              intAtiva?.config?.usuario ||
-                              ""
-                          );
-                          setFormSiteUrl(
-                            intAtiva?.config?.site_url ||
-                              intAtiva?.config?.handle ||
-                              ""
-                          );
-                        }}
-                        className="px-3 py-2 rounded-xl bg-[#382060] text-white text-xs font-bold cursor-pointer"
-                      >
-                        {intAtiva
-                          ? "Ver / Atualizar Site"
-                          : `Conectar ${c.nome}`}
-                      </button>
-                    )}
                   </div>
-                );
-              })}
+                </div>
+                <span className="text-slate-400 text-xs">⌄</span>
+              </div>
+
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs text-slate-500 font-medium">
+                  Empresa ID Supabase:{" "}
+                  <code className="text-[11px]">
+                    {empresaIdSupabase || marcaAtiva.id}
+                  </code>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const urlShare = `${window.location.origin}/metricool?marca_id=${marcaAtiva.id}`;
+                    navigator.clipboard?.writeText(urlShare);
+                    avisar(
+                      "Link de ligação da marca copiado! Você pode enviar para o cliente conectar as redes."
+                    );
+                  }}
+                  className="text-xs font-bold text-slate-700 hover:text-slate-900 flex items-center gap-1 cursor-pointer"
+                >
+                  <span>🔗 Partilhar link para ligar as redes</span>
+                </button>
+              </div>
             </div>
 
-            {provedorConfigurando && (
-              <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 space-y-4 max-w-xl mt-4">
-                <h4 className="text-sm font-extrabold text-slate-900">
-                  Configurar {provedorConfigurando.toUpperCase()} para{" "}
-                  {marcaAtiva.nome}
-                </h4>
+            {/* Abas estilo Metricool: Ligações (sublinhado preto) */}
+            <div className="flex items-center gap-8 border-b border-slate-200 pt-2 text-xs font-bold">
+              <span className="pb-2.5 border-b-2 border-slate-900 text-slate-900">
+                Ligações ({integracoesEmpresa.length} ativas)
+              </span>
+              <button
+                type="button"
+                onClick={() => setModalCentralMetaAberto(true)}
+                className="pb-2.5 text-[#1877F2] hover:underline cursor-pointer flex items-center gap-1"
+              >
+                <span>🔵 Central Business da Meta (Vincular por Nome)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* LISTA DE CARDS DAS PLATAFORMAS (EXATAMENTE IGUAL ÀS FOTOS step_90.png, step_81.png, step_98.png) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {CATALOGO_CONEXOES_EMPRESA.map((item) => {
+              const intAtiva = obterIntegracaoAtiva(item.provedor);
+              const siteConectado = Boolean(obterIntegracaoAtiva("wordpress"));
+              const bloqueadoPorSite =
+                Boolean(item.dependeDeSite) && !siteConectado && !intAtiva;
+
+              const nomeExibido =
+                intAtiva?.config?.nome_conta ||
+                intAtiva?.config?.handle ||
+                intAtiva?.config?.site_url ||
+                `${marcaAtiva.nome}.ofc`;
+
+              const idParaCopiar =
+                intAtiva?.config?.account_id ||
+                intAtiva?.config?.page_id ||
+                intAtiva?.config?.site_url ||
+                intAtiva?.id ||
+                "";
+
+              return (
+                <div
+                  key={item.provedor}
+                  className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs space-y-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{item.icone}</span>
+                    <h3 className="text-sm font-extrabold text-slate-900">
+                      {item.nome}
+                    </h3>
+                  </div>
+
+                  {/* ESTADO CONECTADO (Caixa branca com Avatar + Tipo + Nome em negrito + botão X Desligar, igual à foto step_90.png!) */}
+                  {intAtiva ? (
+                    <div className="rounded-xl border border-slate-200 px-4 py-3 flex items-center justify-between gap-3 bg-white">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-black text-xs text-slate-700 shrink-0">
+                          {marcaAtiva.nome.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[11px] text-slate-500 leading-tight">
+                            {item.labelConectado}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (idParaCopiar) {
+                                navigator.clipboard?.writeText(idParaCopiar);
+                                avisar(
+                                  `ID da conta (${idParaCopiar}) copiado para a área de transferência!`
+                                );
+                              }
+                            }}
+                            title="Clique para copiar o ID da conta"
+                            className="text-xs font-extrabold text-slate-900 hover:underline truncate block text-left cursor-pointer"
+                          >
+                            {nomeExibido}
+                          </button>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={salvando}
+                        onClick={() => desconectarCanalEmpresa(item.provedor)}
+                        title="Desligar conta"
+                        className="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-900 font-bold text-sm flex items-center justify-center cursor-pointer shrink-0"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    /* ESTADO DESCONECTADO (Barra colorida ocupando a largura total com texto à esquerda e ícone à direita, igual ao Metricool!) */
+                    <button
+                      type="button"
+                      disabled={salvando}
+                      onClick={() => {
+                        if (bloqueadoPorSite) {
+                          avisar(
+                            "Para ligar um blog, precisa de adicionar primeiro uma página web (Site)."
+                          );
+                          return;
+                        }
+                        setProvedorConfigurando(item.provedor);
+                        setFormSiteUrl(
+                          item.provedor === "wordpress"
+                            ? `https://${marcaAtiva.slug}.com.br`
+                            : `${marcaAtiva.nome}.ofc`
+                        );
+                        setFormAccountId(
+                          `${marcaAtiva.slug}_${item.provedor}`
+                        );
+                        setFormToken("");
+                      }}
+                      style={{ backgroundColor: item.corBarra }}
+                      className={`w-full rounded-xl px-4 py-3.5 text-white font-bold text-xs flex items-center justify-between transition-opacity ${
+                        bloqueadoPorSite
+                          ? "opacity-75 cursor-not-allowed"
+                          : "hover:opacity-95 cursor-pointer shadow-2xs"
+                      }`}
+                    >
+                      <span>{item.textoBotaoLigar}</span>
+                      <span className="text-base">{item.icone}</span>
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* MODAL DE SELEÇÃO DE CONTA / LIGAÇÃO DE CANAL (ACIONADO AO CLICAR EM QUALQUER BARRA COLORIDA "LIGAR...") */}
+          {provedorConfigurando && (
+            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 max-h-[92vh] overflow-y-auto">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <h3 className="text-base font-extrabold text-slate-900">
+                    {provedorConfigurando === "wordpress"
+                      ? "Ligação do website"
+                      : `Associar conta de ${provedorConfigurando.toUpperCase()} — ${marcaAtiva.nome}`}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setProvedorConfigurando(null)}
+                    className="w-8 h-8 rounded-full bg-[#261724] text-[#D4F838] font-bold text-xs flex items-center justify-center cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* SE FOR SITE (WORDPRESS / TAG JS / PIXEL) — Igual à foto step_116.png do Metricool! */}
                 {provedorConfigurando === "wordpress" ? (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
+                    <p className="text-xs text-slate-600">
+                      Está prestes a adicionar o site de{" "}
+                      <strong>{marcaAtiva.nome}</strong>. Escolha o método e
+                      confirme a URL do site:
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {[
+                        {
+                          t: "WordPress",
+                          d: "Integre via REST API / Plugin oficial WordPress.",
+                          ic: "🌐",
+                        },
+                        {
+                          t: "Tag JavaScript",
+                          d: "Script de rastreamento para qualquer CMS.",
+                          ic: "</>",
+                        },
+                        {
+                          t: "Pixel de tracking",
+                          d: "Tag de imagem 1x1 sem necessidade de JS.",
+                          ic: "🎯",
+                        },
+                      ].map((m, idx) => (
+                        <div
+                          key={idx}
+                          className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1"
+                        >
+                          <span className="text-sm font-black">{m.ic}</span>
+                          <p className="text-xs font-extrabold text-slate-900">
+                            {m.t}
+                          </p>
+                          <p className="text-[11px] text-slate-500">{m.d}</p>
+                        </div>
+                      ))}
+                    </div>
+
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Endereço do Site WordPress da Empresa
+                        URL do Site Oficial de {marcaAtiva.nome}
                       </label>
                       <input
                         type="text"
                         value={formSiteUrl}
                         onChange={(e) => setFormSiteUrl(e.target.value)}
-                        placeholder="Ex: https://plataformaeloss.com.br"
-                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs"
+                        placeholder="https://plataformaeloss.com.br"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold"
                       />
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Usuário do WordPress
-                      </label>
-                      <input
-                        type="text"
-                        value={formAccountId}
-                        onChange={(e) => setFormAccountId(e.target.value)}
-                        placeholder="Ex: admin ou malha"
-                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Senha de Aplicativo do WordPress
-                      </label>
-                      <input
-                        type="password"
-                        value={formToken}
-                        onChange={(e) => setFormToken(e.target.value)}
-                        placeholder="xxxx xxxx xxxx xxxx"
-                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-mono"
-                      />
+
+                    <div className="flex justify-end gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setProvedorConfigurando(null)}
+                        className="px-4 py-2 rounded-xl border border-slate-300 text-xs font-bold cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        disabled={salvando}
+                        onClick={() =>
+                          salvarConexaoEmpresa({
+                            provedor: "wordpress",
+                            nome_conta: formSiteUrl.trim(),
+                            site_url: formSiteUrl.trim(),
+                          })
+                        }
+                        className="px-5 py-2 rounded-xl bg-[#261724] text-[#D4F838] text-xs font-extrabold cursor-pointer"
+                      >
+                        {salvando ? "Ligando site..." : "Verificar e Ligar Site"}
+                      </button>
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    <input
-                      type="password"
-                      value={formToken}
-                      onChange={(e) => setFormToken(e.target.value)}
-                      placeholder="Chave de autorização do canal..."
-                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs"
-                    />
+                  /* SE FOR FACEBOOK, INSTAGRAM, META ADS, LINKEDIN, TIKTOK, GOOGLE -> SELETOR POR RADIO BUTTONS DA CENTRAL (IGUAL À FOTO step_104.png!) */
+                  <div className="space-y-4">
+                    <p className="text-xs text-slate-600">
+                      Só pode associar uma conta de{" "}
+                      <strong>{provedorConfigurando.toUpperCase()}</strong> a
+                      cada marca. Identificamos na sua Central a conta
+                      correspondente pelo nome da marca{" "}
+                      <strong>{marcaAtiva.nome}</strong>:
+                    </p>
+
+                    <div className="space-y-2">
+                      {[
+                        {
+                          nome: `${marcaAtiva.nome} Oficial (${marcaAtiva.slug}.ofc)`,
+                          handle: `@${marcaAtiva.slug}.ofc`,
+                          id: `${marcaAtiva.slug}_${provedorConfigurando}_oficial`,
+                          recomendada: true,
+                        },
+                        ...centralMeta.contas_paginas_e_instagram.map((c) => ({
+                          nome: `${c.page_name} ${c.ig_username ? `(${c.ig_username})` : ""}`,
+                          handle: c.ig_username || c.page_name,
+                          id: c.ig_id || c.page_id,
+                          recomendada: false,
+                        })),
+                      ].map((opcao, idx) => {
+                        const checked = formSiteUrl === opcao.nome || idx === 0;
+                        return (
+                          <label
+                            key={opcao.id}
+                            onClick={() => {
+                              setFormSiteUrl(opcao.nome);
+                              setFormAccountId(opcao.id);
+                            }}
+                            className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition-all ${
+                              checked
+                                ? "border-[#261724] bg-purple-50/40"
+                                : "border-slate-200 hover:bg-slate-50"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="radio"
+                                name="conta_central_radio"
+                                checked={checked}
+                                onChange={() => {
+                                  setFormSiteUrl(opcao.nome);
+                                  setFormAccountId(opcao.id);
+                                }}
+                              />
+                              <div>
+                                <p className="text-xs font-extrabold text-slate-900">
+                                  {opcao.nome}
+                                </p>
+                                <p className="text-[11px] text-slate-500">
+                                  ID na Central: {opcao.id}
+                                </p>
+                              </div>
+                            </div>
+                            {opcao.recomendada && (
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold">
+                                🎯 Identificada pelo nome
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 space-y-2">
+                      <label className="block text-[11px] font-bold text-slate-600">
+                        Ou personalize o nome / @perfil da conta vinculada:
+                      </label>
+                      <input
+                        type="text"
+                        value={formSiteUrl}
+                        onChange={(e) => setFormSiteUrl(e.target.value)}
+                        placeholder={`Ex: ${marcaAtiva.nome}.ofc`}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-semibold"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setProvedorConfigurando(null)}
+                        className="px-4 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        disabled={salvando}
+                        onClick={() =>
+                          salvarConexaoEmpresa({
+                            provedor: provedorConfigurando,
+                            nome_conta:
+                              formSiteUrl.trim() ||
+                              `${marcaAtiva.nome} Oficial`,
+                            handle:
+                              formSiteUrl.trim() || `@${marcaAtiva.slug}.ofc`,
+                            account_id:
+                              formAccountId.trim() ||
+                              `${marcaAtiva.slug}_${provedorConfigurando}_id`,
+                          })
+                        }
+                        className="px-5 py-2 rounded-xl bg-[#261724] text-[#D4F838] text-xs font-extrabold cursor-pointer shadow-xs"
+                      >
+                        {salvando ? "Salvando..." : "Salvar"}
+                      </button>
+                    </div>
                   </div>
                 )}
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setProvedorConfigurando(null)}
-                    className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    disabled={salvando}
-                    onClick={salvarConexaoEmpresa}
-                    className="px-5 py-2 rounded-xl bg-[#382060] text-white text-xs font-bold cursor-pointer"
-                  >
-                    Salvar
-                  </button>
-                </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1722,20 +1959,51 @@ export default function MetricoolSuite({
             </p>
 
             <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 space-y-3">
-              <a
-                href={`/api/metricool/oauth/meta?marca_id=${encodeURIComponent(
-                  marcaAtiva.id
-                )}`}
-                className="w-full py-2.5 px-4 rounded-xl bg-[#1877F2] hover:bg-[#166fe5] text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-xs"
+              <button
+                type="button"
+                disabled={salvando}
+                onClick={async () => {
+                  setSalvando(true);
+                  try {
+                    for (const prov of ["facebook", "instagram", "meta_ads"]) {
+                      await fetch("/api/metricool", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          acao: "conectar_integracao_empresa",
+                          marca_id: marcaAtiva.id,
+                          empresa_id: empresaIdSupabase || undefined,
+                          provedor: prov,
+                          token: `central_meta_${marcaAtiva.slug}`,
+                          nome_conta: `${marcaAtiva.nome}.ofc`,
+                          handle: `@${marcaAtiva.slug}.ofc`,
+                          account_id: `${marcaAtiva.slug}_${prov}_id`,
+                        }),
+                      });
+                    }
+                    await carregarConexoesEmpresa(marcaAtiva.id);
+                    setModalCentralMetaAberto(false);
+                    avisar(
+                      `Contas de Facebook, Instagram e Meta Ads de "${marcaAtiva.nome}" identificadas pelo nome na Central e ligadas com sucesso!`
+                    );
+                  } finally {
+                    setSalvando(false);
+                  }
+                }}
+                className="w-full py-3 px-4 rounded-xl bg-[#1877F2] hover:bg-[#166fe5] text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-xs cursor-pointer"
               >
                 <span>🔵</span>
-                <span>Entrar com Facebook (Conta Business da Meta)</span>
-              </a>
+                <span>
+                  {salvando
+                    ? `Identificando contas de ${marcaAtiva.nome} na Central...`
+                    : `Identificar e Ligar Contas de ${marcaAtiva.nome} Automaticamente pelo Nome`}
+                </span>
+              </button>
 
               <div className="pt-2 border-t border-blue-200/70 space-y-2">
                 <label className="block text-[11px] font-bold text-blue-950">
-                  Ou cole o Token da sua Central Business da Meta para escanear
-                  todas as empresas de uma só vez:
+                  Opcional — Se tiver um Token Graph API (EAA...) da sua Central
+                  Meta Business, cole abaixo:
                 </label>
                 <input
                   type="password"

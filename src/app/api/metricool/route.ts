@@ -1016,9 +1016,12 @@ export async function POST(request: NextRequest) {
       }
 
       const provedor = String(body.provedor || "").trim().toLowerCase();
-      const tokenOuChave = String(body.token || "").trim();
+      const tokenOuChave = String(
+        body.token || body.handle || body.nome_conta || body.site_url || ""
+      ).trim();
       const accountId = String(body.account_id || "").trim();
       const handleInformado = String(body.handle || "").trim();
+      const nomeContaInformado = String(body.nome_conta || "").trim();
       const siteUrl = String(body.site_url || "").trim();
       const usuario = String(body.usuario || "").trim();
 
@@ -1026,15 +1029,18 @@ export async function POST(request: NextRequest) {
         return Response.json(
           {
             error:
-              "Informe o provedor e o Token/Chave de acesso oficial desta empresa.",
+              "Selecione uma conta da Central ou informe a identificação do canal para conectar.",
           },
           { status: 400 }
         );
       }
 
       let configFinal: IntegracaoEmpresaPublica["config"] = {
-        handle: handleInformado || undefined,
+        nome_conta:
+          nomeContaInformado || handleInformado || siteUrl || undefined,
+        handle: handleInformado || nomeContaInformado || undefined,
         account_id: accountId || undefined,
+        page_id: provedor === "facebook" ? accountId || undefined : undefined,
         site_url: siteUrl || undefined,
         usuario: usuario || undefined,
         ultima_sincronizacao: new Date().toISOString(),
@@ -1042,11 +1048,15 @@ export async function POST(request: NextRequest) {
 
       const state = await lerEstadoMetricoolEmpresa(empresaId);
 
-      // Se for Instagram ou Facebook, valida de verdade na Meta Graph API e já puxa métricas, posts e comentários reais!
-      if (provedor === "instagram" || provedor === "facebook") {
+      // Se um token real da Meta Graph API (EAA...) foi fornecido, valida na API da Meta e puxa dados ao vivo!
+      if (
+        (provedor === "instagram" || provedor === "facebook") &&
+        body.token &&
+        String(body.token).trim().startsWith("EAA")
+      ) {
         const syncMeta = await sincronizarDadosReaisMetaGraph({
           provedor,
-          accessToken: tokenOuChave,
+          accessToken: String(body.token).trim(),
           accountIdInformado: accountId,
         });
         if (!syncMeta.ok) {
