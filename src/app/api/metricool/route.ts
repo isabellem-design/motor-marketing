@@ -2,6 +2,9 @@ import crypto from "node:crypto";
 import { NextRequest } from "next/server";
 import { EMPRESA_ELOSS_SUPABASE_ID } from "@/lib/engine/mcp-auth";
 import {
+  escanearCentralMetaEVincularPorNome,
+} from "@/lib/engine/meta-business-central";
+import {
   MARCA_AGENTFAZ_ID,
   MARCA_ELOSS_ID,
   MARCA_TRAMPO_ID,
@@ -663,11 +666,23 @@ export async function GET(request: NextRequest) {
       db = await sincronizarDemandasComSupabase(db, empresaId);
     }
 
-    const [empresasSupabase, { publicas: integracoesEmpresa }] =
-      await Promise.all([
-        listarEmpresasSupabase(),
-        listarIntegracoesEmpresaSupabase(empresaId),
-      ]);
+    const [
+      empresasSupabase,
+      { publicas: integracoesEmpresa },
+      { rawRows: elossRows },
+    ] = await Promise.all([
+      listarEmpresasSupabase(),
+      listarIntegracoesEmpresaSupabase(empresaId),
+      listarIntegracoesEmpresaSupabase(EMPRESA_ELOSS_SUPABASE_ID),
+    ]);
+
+    const centralMetaRow = elossRows.find(
+      (r) => r.provedor === "meta_business_central" && r.ativa
+    );
+    const centralMetaConfig = (centralMetaRow?.config || {}) as Record<
+      string,
+      unknown
+    >;
 
     const empresaAtual = empresasSupabase.find((e) => e.id === empresaId);
     const state = await lerEstadoMetricoolEmpresa(
@@ -681,6 +696,20 @@ export async function GET(request: NextRequest) {
         empresa_id: empresaId,
         empresas_supabase: empresasSupabase,
         integracoes_empresa: integracoesEmpresa,
+        central_meta_business: centralMetaRow
+          ? {
+              conectada: true,
+              usuario_meta_nome: centralMetaConfig.usuario_meta_nome,
+              ultima_varredura: centralMetaConfig.ultima_varredura,
+              contas_paginas_e_instagram:
+                centralMetaConfig.contas_paginas_e_instagram || [],
+              contas_anuncios: centralMetaConfig.contas_anuncios || [],
+            }
+          : {
+              conectada: false,
+              contas_paginas_e_instagram: [],
+              contas_anuncios: [],
+            },
         state,
         total_demandas_supabase: db.demandas.filter(
           (d) => d.marca_id === marcaId
@@ -709,6 +738,192 @@ export async function POST(request: NextRequest) {
       body.empresa_id || mapearMarcaParaEmpresaSupabaseId(marca_id || "");
 
     const creds = getSupabaseCreds();
+
+    // ========================================================================
+    // 0. CONECTAR CENTRAL META BUSINESS E IDENTIFICAR CONTAS PELO NOME DA EMPRESA
+    // ========================================================================
+    if (acao === "conectar_central_meta_business") {
+      const tokenCentral = String(body.token_central || "").trim();
+      const metaAppId = String(body.meta_app_id || "").trim();
+      const metaAppSecret = String(body.meta_app_secret || "").trim();
+
+      if (!tokenCentral) {
+        return Response.json(
+          {
+            error:
+              "Autorize ou cole o token da sua Conta Business da Meta para escanear as empresas automaticamente.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const resultado = await escanearCentralMetaEVincularPorNome({
+        userAccessToken: tokenCentral,
+        metaAppId: metaAppId || undefined,
+        metaAppSecret: metaAppSecret || undefined,
+      });
+
+      if (!resultado.ok) {
+        return Response.json(
+          { error: resultado.error || "Falha ao escanear Central Meta." },
+          { status: 400 }
+        );
+      }
+
+      const { publicas } = await listarIntegracoesEmpresaSupabase(empresaId);
+      return Response.json(
+        {
+          ok: true,
+          resultado,
+          integracoes_empresa: publicas,
+          central_meta_business: {
+            conectada: true,
+            usuario_meta_nome: resultado.usuario_meta_nome,
+            ultima_varredura: new Date().toISOString(),
+            contas_paginas_e_instagram: resultado.contas_paginas_e_instagram,
+            contas_anuncios: resultado.contas_anuncios,
+          },
+        },
+        { status: 200 }
+      );
+    }
+
+    // Permite vincular em 1 clique qualquer Página/Instagram descoberto na Central Meta à empresa ativa
+    if (acao === "vincular_conta_da_central_meta") {
+      if (!creds) {
+        return Response.json(
+          { error: "Supabase não configurado." },
+          { status: 500 }
+        );
+      }
+      const { rawRows: elossRows } = await listarIntegracoesEmpresaSupabase(
+        EMPRESA_ELOSS_SUPABASE_ID
+      );
+      const centralRow = elossRows.find(
+        (r) => r.provedor === "meta_business_central" && r.ativa
+      );
+      if (!centralRow) {
+        return Response.json(
+          { error: "Conecte primeiro a Central Business da Meta." },
+          { status: 400 }
+        );
+      }
+      const tokenCentral = descriptografarChave(centralRow.chave_criptografada);
+      const contaEscolhida = body.conta as {
+        page_id: string;
+        page_name: string;
+        page_followers?: number;
+        ig_id?: string;
+        ig_username?: string;
+        ig_name?: string;
+        ig_followers?: number;
+        ig_media_count?: number;
+      };
+      if (!contaEscolhida?.page_id) {
+        return Response.json(
+          { error: "Selecione uma conta da Central Meta." },
+          { status: 400 }
+        );
+      }
+
+      // Salva Facebook e Instagram para a empresa ativa
+      const agora = new Date().toISOString();
+      const chCrip = criptografarChave(tokenCentral);
+      const chMasc = mascararChave(tokenCentral);
+
+      for (const item of [
+        {
+          provedor: "facebook",
+          ativo: true,
+          config: {
+            page_id: contaEscolhida.page_id,
+            nome_conta: contaEscolhida.page_name,
+            handle: contaEscolhida.page_name,
+            seguidores: contaEscolhida.page_followers,
+            ultima_sincronizacao: agora,
+          },
+        },
+        ...(contaEscolhida.ig_id
+          ? [
+              {
+                provedor: "instagram",
+                ativo: true,
+                config: {
+                  account_id: contaEscolhida.ig_id,
+                  handle:
+                    contaEscolhida.ig_username || contaEscolhida.page_name,
+                  nome_conta:
+                    contaEscolhida.ig_name || contaEscolhida.page_name,
+                  seguidores: contaEscolhida.ig_followers,
+                  total_publicacoes: contaEscolhida.ig_media_count,
+                  ultima_sincronizacao: agora,
+                },
+              },
+            ]
+          : []),
+      ]) {
+        const chk = await fetch(
+          `${creds.url}/rest/v1/integracoes?empresa_id=eq.${encodeURIComponent(
+            empresaId
+          )}&provedor=eq.${encodeURIComponent(item.provedor)}&select=id&limit=1`,
+          {
+            headers: {
+              apikey: creds.key,
+              Authorization: `Bearer ${creds.key}`,
+            },
+          }
+        );
+        const ex = chk.ok
+          ? ((await chk.json()) as Array<{ id: string }>)
+          : [];
+        if (ex[0]?.id) {
+          await fetch(
+            `${creds.url}/rest/v1/integracoes?id=eq.${encodeURIComponent(
+              ex[0].id
+            )}`,
+            {
+              method: "PATCH",
+              headers: {
+                apikey: creds.key,
+                Authorization: `Bearer ${creds.key}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                chave_criptografada: chCrip,
+                chave_mascarada: chMasc,
+                ativa: true,
+                config: item.config,
+                atualizado_em: agora,
+              }),
+            }
+          );
+        } else {
+          await fetch(`${creds.url}/rest/v1/integracoes`, {
+            method: "POST",
+            headers: {
+              apikey: creds.key,
+              Authorization: `Bearer ${creds.key}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              empresa_id: empresaId,
+              provedor: item.provedor,
+              chave_criptografada: chCrip,
+              chave_mascarada: chMasc,
+              ativa: true,
+              config: item.config,
+              atualizado_em: agora,
+            }),
+          });
+        }
+      }
+
+      const { publicas } = await listarIntegracoesEmpresaSupabase(empresaId);
+      return Response.json(
+        { ok: true, integracoes_empresa: publicas },
+        { status: 200 }
+      );
+    }
 
     // ========================================================================
     // 1. CRIAR NOVA EMPRESA / CLIENTE NO SUPABASE (MULTI-TENANT REAL)
