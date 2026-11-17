@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 const ORGANIZACAO_PADRAO_ID = "54ad1645-b296-4a3a-8420-e4ac6b7dcd1e";
 
-export function mapearMarcaParaEmpresaSupabaseId(marcaId: string): string {
+function mapearMarcaParaEmpresaSupabaseId(marcaId: string): string {
   if (!marcaId || marcaId === MARCA_ELOSS_ID) return EMPRESA_ELOSS_SUPABASE_ID;
   if (marcaId === MARCA_TRAMPO_ID) return "00000000-0000-0000-0000-000000000002";
   if (marcaId === MARCA_AGENTFAZ_ID) return "00000000-0000-0000-0000-000000000003";
@@ -772,7 +772,7 @@ export async function POST(request: NextRequest) {
           id: emp.id,
           slug,
           nome: emp.nome,
-          tipo_marca: "cliente",
+          tipo_marca: "cliente_externo",
           fonte_conhecimento: "supabase",
           config_fonte: {
             tabela: "empresas + integracoes (Supabase)",

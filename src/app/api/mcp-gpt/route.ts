@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
  * 4. Os Prompts Visuais de 8 Pontos (com Cláusula Anti-Mosaico) prontos para o ChatGPT desenhar cada lâmina
  * 5. Instrução MCP / JSON de Sincronização Automática de volta para o sistema
  */
-export async function construirSuperPromptChatGpt(
+async function construirSuperPromptChatGpt(
   demandaId: string,
   empresaId: string = EMPRESA_ELOSS_SUPABASE_ID
 ) {
@@ -148,14 +148,14 @@ ${todosPromptsArte}
   };
 }
 
-export async function aplicarAtualizacaoDoChatGpt(
+async function aplicarAtualizacaoDoChatGpt(
   payload: AtualizarPecaSupabasePayload,
   empresaId: string = EMPRESA_ELOSS_SUPABASE_ID
 ) {
   return atualizarPecaNoSupabase(payload, empresaId);
 }
 
-export async function salvarArteColadaNoSupabase(
+async function salvarArteColadaNoSupabase(
   body: {
     demanda_id?: string;
     ordem_slide?: number;

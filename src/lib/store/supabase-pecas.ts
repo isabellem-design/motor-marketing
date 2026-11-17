@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import {
   ChecagemMarcaEloss,
   ConteudoEstruturadoPeca,
@@ -1083,4 +1085,204 @@ export async function atualizarPecaNoSupabase(
 
   writeMotorDb(db);
   return demandaAtualizada;
+}
+
+export async function construirSuperPromptChatGpt(
+  demandaId: string,
+  empresaId: string = EMPRESA_ELOSS_SUPABASE_ID
+) {
+  const { demanda, db } = await obterDemandaOuPecaDoSupabase(
+    demandaId,
+    empresaId
+  );
+
+  const tema = db.temas_editoriais.find(
+    (t) => t.id === demanda.tema_origem_id
+  );
+  const artigo = db.artigos_blog_ancora.find(
+    (a) =>
+      a.id === demanda.artigo_blog_origem_id ||
+      a.tema_id === demanda.tema_origem_id
+  );
+
+  const slides = demanda.conteudo_estruturado?.slides || [];
+  const legenda = demanda.conteudo_estruturado?.legenda || "";
+
+  const blocoSlidesAtuais =
+    slides.length > 0
+      ? slides
+          .map(
+            (s) => `### SLIDE ${s.ordem} de ${slides.length} (${s.tipo.toUpperCase()})
+- Headline: ${s.headline}
+- Destaque Gradiente (#5B1F8A → #F4834B): ${s.headline_destaque || "(definir)"}
+- Corpo: ${s.corpo}
+- CTA: ${s.cta || "(sem CTA)"}
+- Prompt de Arte 8 Pontos (com Cláusula Anti-Mosaico):
+${s.prompt_imagem || s.direcao_visual}`
+          )
+          .join("\n\n")
+      : "(Slides ainda não definidos — gere os 8 slides completos a partir da matéria abaixo)";
+
+  const todosPromptsArte =
+    slides.length > 0
+      ? slides
+          .map(
+            (s) =>
+              `=== ARTE DO SLIDE ${s.ordem} DE ${slides.length} ===\n${
+                s.prompt_imagem ||
+                `Crie um slide individual em 1080x1350px, proporção 4:5. Não gere mosaico, não gere grid, não coloque múltiplos slides em uma única imagem. Este é o slide ${s.ordem} de ${slides.length}, gere apenas este slide isolado. a) Formato: Single image, Instagram post, 1080x1350px, 4:5 portrait. b) Fundo: Modo Escuro #0A0820 a #0D0A1A com glows #5B1F8A e #F4834B. c) Marca: ELOSS no topo esquerdo. d) Headline: "${s.headline}" com destaque gradiente em "${s.headline_destaque || ""}". e) Corpo: "${s.corpo}". f) Elemento gráfico central 3D glass: ${s.direcao_visual}. g) Rodapé: 0${s.ordem}/0${slides.length}. h) Estilo: Dark tech editorial, Poppins ExtraBold, DM Sans.`
+              }`
+          )
+          .join("\n\n")
+      : "";
+
+  const superPromptCompleto = `# CONTEXTO E COMANDO MESTRE — MOTOR DE MARKETING ELOSS (PLANO CHATGPT)
+Você está conectado ao fluxo de produção da **Eloss ("Plataforma Operacional de Crescimento para empresas que distribuem através de pessoas")**.
+- **ID da Peça no Sistema (\`demanda_id\`):** \`${demanda.id}\`
+- **Tema (\`codigo_tema\`):** ${tema?.codigo_tema || "T1"} — ${tema?.titulo_tema || demanda.titulo}
+- **Canal / Formato:** ${demanda.formato_canal.toUpperCase()}
+
+---
+
+## 1. DIRETRIZES INEGOCIÁVEIS DA MARCA ELOSS
+- **Tom de Voz:** Afirmativo, direto, técnico e acessível para o dono/sócio da operação. NUNCA use gerúndio no início de frases, nunca use clichês de marketing ("no mundo atual", "revolucionário", "descubra como").
+- **Proibições Absolutas:** Zero vocabulário de consultoria ("diagnóstico", "auditoria", "consultoria", "assessoria", "mentoria"). Zero menção a concorrentes.
+- **Identidade Visual (Dark Tech Editorial 4:5 — 1080x1350px):**
+  - Fundo escuro profundo (\`#0A0820\`, \`#0D0A1A\`, \`#382060\`) com glows sutis em roxo (\`#5B1F8A\`) e laranja coral (\`#F4834B\`).
+  - Tipografia: **Poppins ExtraBold** nas headlines (com apenas 1 trecho por slide em gradiente \`#5B1F8A → #F4834B\`) e **DM Sans** no corpo com barra vertical \`#F4834B\` à esquerda.
+  - **Cláusula Anti-Mosaico Obrigatória em toda arte:** Cada imagem gerada DEVE ser um slide individual isolado em 1080x1350px (4:5). Proibido gerar grid ou mosaico com vários slides juntos.
+
+---
+
+## 2. MATÉRIA ÂNCORA DO BLOG (BASE TÉCNICA DO POST)
+${(artigo?.conteudo_completo_markdown || demanda.briefing.pauta_central || "").slice(0, 7500)}
+
+---
+
+## 3. ESTRUTURA ATUAL DO POST / CARROSSEL (${slides.length || 8} SLIDES) E PROMPTS DE 8 PONTOS
+${blocoSlidesAtuais}
+
+### LEGENDA ATUAL:
+${legenda}
+
+---
+
+## 4. O QUE VOCÊ DEVE FAZER AGORA NO CHATGPT:
+1. **Se eu pedir para refinar ou criar o conteúdo do post/carrossel:** melhore os slides, a legenda e os prompts visuais de 8 pontos mantendo 100% de fidelidade aos dados da Matéria Âncora e às Regras da Eloss.
+2. **Se eu pedir para gerar as artes ("Gere a arte do Slide 1", "Gere todas as artes uma a uma"):** gere **uma imagem por vez** em proporção vertical (4:5 / 1024x1536) seguindo fielmente o Prompt de 8 Pontos daquele slide, sem mosaico.
+3. **Quando eu pedir para ATUALIZAR NO SISTEMA DA ELOSS:**
+   - Se a ferramenta MCP \`atualizar_post_no_sistema_eloss\` (ou Action \`atualizarPostNoSistemaEloss\`) estiver ativa, chame-a diretamente passando \`demanda_id: "${demanda.id}"\`.
+   - E também entregue o bloco JSON abaixo pronto para sincronização em 1 clique no painel da Eloss.`;
+
+  const promptSomenteArtes = `# GERAR ARTES DO CARROSSEL ELOSS NO CHATGPT (1 SLIDE POR VEZ — PROPORÇÃO 4:5 VERTICAL)
+Peça: ${tema?.codigo_tema || ""} — ${demanda.titulo}
+IMPORTANTE: Gere **1 imagem individual por vez** (começando pelo Slide 1). NUNCA gere mosaico ou grid com vários slides na mesma imagem.
+
+${todosPromptsArte}
+
+---
+👉 **Comece agora gerando apenas a imagem isolada do SLIDE 1 DE ${slides.length || 8}** seguindo exatamente as instruções do Slide 1 acima.`;
+
+  return {
+    demanda_id: demanda.id,
+    titulo: demanda.titulo,
+    atualizado_em: demanda.atualizado_em,
+    slides,
+    legenda,
+    super_prompt_completo: superPromptCompleto,
+    prompt_sequencia_artes: promptSomenteArtes,
+  };
+}
+
+export async function salvarArteColadaNoSupabase(
+  body: {
+    demanda_id?: string;
+    ordem_slide?: number;
+    data_url?: string;
+  },
+  empresaId: string = EMPRESA_ELOSS_SUPABASE_ID
+) {
+  const { demanda_id, ordem_slide, data_url } = body;
+  if (!demanda_id || !data_url) {
+    throw new ErroPersistenciaSupabase(
+      "demanda_id e data_url são obrigatórios.",
+      400
+    );
+  }
+
+  const { demanda } = await obterDemandaOuPecaDoSupabase(
+    demanda_id,
+    empresaId
+  );
+
+  const matches = String(data_url).match(
+    /^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/
+  );
+  if (!matches) {
+    throw new ErroPersistenciaSupabase("Formato de imagem inválido.", 400);
+  }
+
+  const ext = matches[1] === "jpeg" ? "jpg" : matches[1];
+  const mimeType = `image/${matches[1]}`;
+  const b64Data = matches[2];
+  const buffer = Buffer.from(b64Data, "base64");
+  const ordemNum = Number(ordem_slide || 1);
+  const fileName = `chatgpt-plan-slide-${demanda.id.slice(0, 8)}-${ordemNum}-${Date.now()}.${ext}`;
+
+  let imageUrl = "";
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (supabaseUrl && supabaseKey) {
+    try {
+      const storagePath = `${demanda.id}/${fileName}`;
+      const upRes = await fetch(
+        `${supabaseUrl}/storage/v1/object/peca-imagens/${storagePath}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${supabaseKey}`,
+            apikey: supabaseKey,
+            "Content-Type": mimeType,
+            "x-upsert": "true",
+          },
+          body: buffer,
+        }
+      );
+      if (upRes.ok) {
+        imageUrl = `${supabaseUrl}/storage/v1/object/public/peca-imagens/${storagePath}`;
+      }
+    } catch {
+      // fallback local
+    }
+  }
+
+  if (!imageUrl) {
+    try {
+      const dir = path.join(process.cwd(), "public", "geradas");
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(path.join(dir, fileName), buffer);
+      imageUrl = `/geradas/${fileName}`;
+    } catch {
+      imageUrl = String(data_url);
+    }
+  }
+
+  const slidesAtuais = demanda.conteudo_estruturado?.slides || [];
+  const slidesAtualizados = slidesAtuais.map((s) =>
+    s.ordem === ordemNum ? { ...s, imagem_url: imageUrl } : s
+  );
+
+  const demandaSalva = await atualizarPecaNoSupabase(
+    {
+      demanda_id: demanda.id,
+      slides: slidesAtualizados,
+      ator: "ChatGPT (Upload Arte Slide) + Isabelle",
+    },
+    empresaId
+  );
+
+  return { imageUrl, demanda: demandaSalva };
 }

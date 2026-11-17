@@ -17,11 +17,9 @@ import {
 import {
   ErroPersistenciaSupabase,
   atualizarPecaNoSupabase,
-} from "@/lib/store/supabase-pecas";
-import {
   construirSuperPromptChatGpt,
   salvarArteColadaNoSupabase,
-} from "@/app/api/mcp-gpt/route";
+} from "@/lib/store/supabase-pecas";
 import {
   ArtigoBlogAncora,
   Demanda,
